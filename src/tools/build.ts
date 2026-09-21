@@ -2,6 +2,7 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import type { ConnectionManager } from "../transports/connection-manager.js";
 import type { UnrealMcpConfig } from "../types.js";
+import { safeArgString } from "../utils/safe-arg.js";
 
 export function registerBuildTools(
 	server: McpServer,
@@ -12,13 +13,13 @@ export function registerBuildTools(
 		"build_target",
 		"Build a C++ target using UnrealBuildTool. Compiles the project's C++ code.",
 		{
-			target: z.string().default("Editor").describe("Build target: Editor, Game, Client, Server"),
-			platform: z
-				.string()
+			target: safeArgString
+				.default("Editor")
+				.describe("Build target: Editor, Game, Client, Server"),
+			platform: safeArgString
 				.optional()
 				.describe("Target platform (default from config, e.g., Win64)"),
-			configuration: z
-				.string()
+			configuration: safeArgString
 				.optional()
 				.describe("Build config: Debug, DebugGame, Development, Shipping, Test"),
 			clean: z.boolean().default(false).describe("Clean build"),
@@ -54,9 +55,12 @@ export function registerBuildTools(
 			run: z.boolean().default(false).describe("Run after packaging"),
 			iterate: z.boolean().default(false).describe("Iterative cook (faster rebuilds)"),
 			compressed: z.boolean().default(false).describe("Compress pak files"),
-			platform: z.string().optional().describe("Target platform"),
-			configuration: z.string().optional().describe("Build configuration"),
-			additional_args: z.array(z.string()).optional().describe("Additional UAT arguments"),
+			platform: safeArgString.optional().describe("Target platform"),
+			configuration: safeArgString.optional().describe("Build configuration"),
+			additional_args: z
+				.array(safeArgString)
+				.optional()
+				.describe("Additional UAT arguments"),
 		},
 		async (opts) => {
 			const result = await manager.subprocess.buildCookRun({
@@ -86,9 +90,9 @@ export function registerBuildTools(
 		"cook_content",
 		"Cook content only (no C++ build). Converts assets to platform-specific format.",
 		{
-			platform: z.string().optional().describe("Target platform"),
+			platform: safeArgString.optional().describe("Target platform"),
 			iterate: z.boolean().default(true).describe("Iterative cook"),
-			maps: z.array(z.string()).optional().describe("Specific maps to cook (empty = all)"),
+			maps: z.array(safeArgString).optional().describe("Specific maps to cook (empty = all)"),
 		},
 		async ({ platform, iterate, maps }) => {
 			const args: string[] = [];
@@ -116,9 +120,8 @@ export function registerBuildTools(
 		"package_project",
 		"Package the project for distribution. Runs build + cook + stage + package.",
 		{
-			platform: z.string().optional().describe("Target platform"),
-			configuration: z
-				.string()
+			platform: safeArgString.optional().describe("Target platform"),
+			configuration: safeArgString
 				.default("Shipping")
 				.describe("Build configuration (typically Shipping for distribution)"),
 			compressed: z.boolean().default(true).describe("Compress pak files"),
@@ -146,9 +149,9 @@ export function registerBuildTools(
 		"build_plugin",
 		"Build a plugin standalone.",
 		{
-			plugin_path: z.string().describe("Path to the .uplugin file"),
-			output_path: z.string().describe("Output directory for the built plugin"),
-			platform: z.string().optional().describe("Target platform"),
+			plugin_path: safeArgString.describe("Path to the .uplugin file"),
+			output_path: safeArgString.describe("Output directory for the built plugin"),
+			platform: safeArgString.optional().describe("Target platform"),
 		},
 		async ({ plugin_path, output_path, platform }) => {
 			const result = await manager.subprocess.runUAT("BuildPlugin", [
@@ -194,9 +197,9 @@ export function registerBuildTools(
 		"build_graph",
 		"Execute a BuildGraph XML script for CI/CD automation.",
 		{
-			script_path: z.string().describe("Path to the BuildGraph XML script"),
-			target: z.string().describe("BuildGraph target to execute"),
-			additional_args: z.array(z.string()).optional().describe("Additional arguments"),
+			script_path: safeArgString.describe("Path to the BuildGraph XML script"),
+			target: safeArgString.describe("BuildGraph target to execute"),
+			additional_args: z.array(safeArgString).optional().describe("Additional arguments"),
 		},
 		async ({ script_path, target, additional_args }) => {
 			const args = [`-script=${script_path}`, `-target=${target}`, ...(additional_args || [])];
@@ -218,7 +221,7 @@ export function registerBuildTools(
 		"clean_project",
 		"Clean build artifacts for the project.",
 		{
-			platform: z.string().optional().describe("Target platform"),
+			platform: safeArgString.optional().describe("Target platform"),
 		},
 		async ({ platform }) => {
 			const result = await manager.subprocess.runUBT([

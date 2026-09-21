@@ -2,6 +2,7 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import type { ConnectionManager } from "../transports/connection-manager.js";
 import type { UnrealMcpConfig } from "../types.js";
+import { safeArgString } from "../utils/safe-arg.js";
 import { inlineScript } from "../utils/template.js";
 
 export function registerAssetTools(
@@ -355,7 +356,7 @@ print(json.dumps({"success": True}))`;
 		"resave_packages",
 		"Bulk resave all packages in the project (runs ResavePackages commandlet).",
 		{
-			directory: z.string().optional().describe("Limit to a specific content directory"),
+			directory: safeArgString.optional().describe("Limit to a specific content directory"),
 		},
 		async ({ directory }) => {
 			const args: string[] = [];

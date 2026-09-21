@@ -189,8 +189,14 @@ export class SubprocessRunner {
 			const stdoutChunks: string[] = [];
 			const stderrChunks: string[] = [];
 
+			// No shell:true: on Windows, Node's own (patched, >=18.20.2/20.12.2/21.7.3)
+			// batch-file handling safely invokes .bat/.cmd targets without a shell
+			// re-parsing the whole command line — see CVE-2024-27980. Explicit
+			// shell:true would reopen that class of injection regardless of Node
+			// version, since cmd.exe still treats & | ^ etc. as operators even
+			// inside a quoted argument. Callers must also validate free-text
+			// arguments with utils/safe-arg.ts before they reach here.
 			const child = spawn(command, args, {
-				shell: true,
 				stdio: ["pipe", "pipe", "pipe"],
 			});
 
