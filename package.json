@@ -1,6 +1,6 @@
 {
   "name": "@jjpxdev/unreal-mcp",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "description": "The most comprehensive MCP server for Unreal Engine — 120+ tools across 16 subsystems. Security-hardened fork of sam-david/unreal-mcp.",
   "license": "MIT",
   "type": "module",
