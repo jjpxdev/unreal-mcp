@@ -2,6 +2,7 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import type { ConnectionManager } from "../transports/connection-manager.js";
 import type { UnrealMcpConfig } from "../types.js";
+import { safeArgString } from "../utils/safe-arg.js";
 import { inlineScript } from "../utils/template.js";
 
 export function registerTestingTools(
@@ -94,9 +95,9 @@ print(json.dumps({"validating": count, "directory": "{{directory}}"}))`,
 		"run_gauntlet",
 		"Launch a Gauntlet test session via UAT. Runs tests in a full game instance.",
 		{
-			test_name: z.string().describe("Gauntlet test name"),
-			platform: z.string().optional().describe("Target platform"),
-			configuration: z.string().default("Development").describe("Build configuration"),
+			test_name: safeArgString.describe("Gauntlet test name"),
+			platform: safeArgString.optional().describe("Target platform"),
+			configuration: safeArgString.default("Development").describe("Build configuration"),
 		},
 		async ({ test_name, platform, configuration }) => {
 			const result = await manager.subprocess.runUAT("RunUnreal", [
