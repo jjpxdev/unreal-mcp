@@ -179,7 +179,7 @@ The server probes all transports on startup and tools gracefully degrade. Most t
 
 - **Minimal path**: Python Remote Execution alone covers the large majority of tools (everything except `remote-control-presets` and the RC-fallback for Python execution). Smaller network-facing surface — no Remote Control API listener at all.
 - **Core path** (no C++ plugin): Python + Remote Control together cover ~95% of tools, including `remote-control-presets`. Remote Control also serves as a fallback Python-execution path if the primary transport is unavailable.
-- **Plugin path** (optional): C++ plugin on port 55557 adds K2 node graph manipulation, faster bulk operations, and editor UI integration. Falls back to Python automatically when unavailable. **Note:** the `plugin/UnrealMCPBridge/` C++ plugin referenced by this doc is not currently present in this repo — Blueprint graph tools (`add_graph_node`, `connect_graph_nodes`, `remove_graph_node`) are not functional out of the box.
+- **Plugin path** (optional): C++ plugin on port 55557 adds K2 node graph manipulation, faster bulk operations, and editor UI integration. Falls back to Python automatically when unavailable. Requires a separate build step — see [Optional (for Blueprint graph tools)](#optional-for-blueprint-graph-tools) below.
 
 ## Configuration
 
@@ -276,7 +276,27 @@ The `!AllowlistedClients=ClearArray` line matters: the wide-open default is a C+
 
 ### Optional (for Blueprint graph tools)
 
-Install the C++ plugin from `plugin/UnrealMCPBridge/` into your project's `Plugins/` directory. **Not currently included in this repo** — this folder doesn't exist yet, so `add_graph_node`/`connect_graph_nodes`/`remove_graph_node` won't work until it's added.
+Copy `plugin/UnrealMCPBridge/` into your project's `Plugins/` directory, add it to the
+`Plugins` array in your `.uproject`, then rebuild the editor target:
+
+```
+"<UE>/Engine/Build/BatchFiles/Build.bat" <Project>Editor Win64 Development -Project="<path>.uproject"
+```
+
+The editor must be closed while building. Requires a C++ project — a Blueprint-only
+project has no editor target to compile the plugin into.
+
+This is what enables `add_graph_node`, `connect_graph_nodes`, `remove_graph_node` and
+`list_graph_nodes`, none of which have a Python fallback: the Blueprint graph API
+(`ubergraph_pages`) is not exposed to Python. The plugin also serves `create_blueprint`,
+`add_blueprint_component`, `add_blueprint_variable` and `add_blueprint_function`, which
+otherwise fall back to Python.
+
+The bridge listens on `127.0.0.1:55557` — hardcoded to loopback in the plugin itself
+(`FIPv4Address::InternalLoopback`), not a configurable bind address, so unlike Remote
+Control or Python Remote Execution there's no equivalent "don't widen this to 0.0.0.0"
+warning needed here. Pass `-MCPBridgePort=<n>` on the editor command line if you run two
+editors at once, so the second does not lose the bind race.
 
 ## Development
 
