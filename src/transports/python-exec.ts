@@ -29,7 +29,20 @@ export class PythonExecClient {
 		const remoteConfig = new RemoteExecutionConfig(
 			0, // multicastTTL: local host only
 			["239.0.0.1", 6766], // multicastGroupEndpoint (UE default)
-			"0.0.0.0", // multicastBindAddress
+			// multicastBindAddress: was hardcoded "0.0.0.0", which lets the OS
+			// pick the default outbound interface for the multicast send -- on
+			// Windows that's typically the real NIC, not loopback. When UE's
+			// own RemoteExecutionMulticastBindAddress is 127.0.0.1 (the
+			// recommended, hardened setting -- see README Security section),
+			// its multicast group membership is scoped to that interface only,
+			// so a ping arriving via any other interface is silently dropped:
+			// discovery fails with no error on either side. Using config.host
+			// here (matches commandEndpoint below, always 127.0.0.1 in this
+			// codebase) forces the client to send via the same interface the
+			// editor is actually listening on. Confirmed via a raw UDP test:
+			// binding/sending via "0.0.0.0" got no reply; forcing "127.0.0.1"
+			// got an immediate, valid pong from the editor.
+			config.host,
 			[config.host, config.port], // commandEndpoint
 		);
 		this.remote = new RemoteExecution(remoteConfig);
@@ -68,6 +81,17 @@ export class PythonExecClient {
 			await this.remote.start();
 			this._started = true;
 
+			// remote.start() only opens the broadcast socket -- it does NOT
+			// send a discovery ping (that only happens via
+			// startSearchingForNodes()/getFirstRemoteNode() in the
+			// unreal-remote-execution library). Without this call, the wait
+			// loop below polls remoteNodes forever without anything ever
+			// populating it: confirmed via direct testing, the previous
+			// version of this method never actually asked the editor
+			// anything. startSearchingForNodes(interval) pings on that same
+			// cadence while we wait.
+			this.remote.startSearchingForNodes(500);
+
 			// Wait for UE node discovery via UDP multicast
 			await new Promise<void>((resolve) => {
 				const maxWait = 5000;
@@ -84,6 +108,18 @@ export class PythonExecClient {
 				};
 				check();
 			});
+
+			// Deliberately NOT calling stopSearchingForNodes() here: despite
+			// its name, it does `this.nodes = {}` internally in the
+			// unreal-remote-execution library -- calling it immediately wipes
+			// the node we just found, so isAvailable()'s very next check
+			// (`remote.remoteNodes.length > 0`) would always see 0 and
+			// report unavailable even on a successful discovery. Confirmed
+			// by direct trace: remoteNodes.length was 1 at the moment this
+			// resolved, then 0 immediately after adding a stop call here.
+			// Leaving the periodic ping running is a minor, harmless amount
+			// of local network chatter; openCommandConnection() already
+			// stops searching on its own once a real connection opens.
 		} catch (err) {
 			this._started = false;
 			throw new UnrealMcpError(
