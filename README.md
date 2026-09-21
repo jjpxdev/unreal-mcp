@@ -40,6 +40,16 @@ If you can reach a UE Editor's Remote Control API or Python Remote Execution por
 
 ### Install
 
+**No clone needed** — published to npm as a scoped package:
+
+```bash
+npx -y @jjpxdev/unreal-mcp
+```
+
+This is the preferred path once published; no manual clone/build step, and each dev always gets whatever version your `.mcp.json` pins. Unlike `npx github:...` (see below), `npx` against a real registry package doesn't hit npm's git-fetcher bug and works normally.
+
+**From source** (if you need to modify the code, or the package isn't published yet):
+
 ```bash
 git clone https://github.com/jjpxdev/unreal-mcp.git
 cd unreal-mcp
@@ -48,11 +58,24 @@ npm install
 
 `npm install` now builds `dist/` automatically via a `prepare` script — no separate `npm run build` needed (though `npm run build` still works if you want to rebuild after pulling changes without reinstalling).
 
-> **Installing via `npx`/`github:` spec doesn't currently work.** `npx github:jjpxdev/unreal-mcp` (and the `git+https://` and `--package=` variants) fail with `GitFetcher requires an Arborist constructor to pack a tarball` on npm 10.9.8 — a known npm limitation with `npx` executing git specs directly, not something fixable from this repo. `npm install github:jjpxdev/unreal-mcp#<commit>` (as a project dependency, not via `npx`) works fine and does run `prepare` correctly — use that if you want to pull a specific pinned commit without a manual clone.
+> **Installing directly via a `github:`/`git+https:` spec through `npx` doesn't work.** `npx github:jjpxdev/unreal-mcp` (and the `git+https://` and `--package=` variants) fail with `GitFetcher requires an Arborist constructor to pack a tarball` on npm 10.9.8 — a known npm limitation with `npx` executing git specs directly, not something fixable from this repo, and unrelated to the registry-based `npx @jjpxdev/unreal-mcp` above. `npm install github:jjpxdev/unreal-mcp#<commit>` (as a project dependency, not via `npx`) works fine and does run `prepare` correctly — use that if you want to pull a specific pinned commit from source without a manual clone.
 
 ### Add to Claude Code
 
-**Per-project, portable across a team** — commit a `.mcp.json` in your UE project root referencing an environment variable rather than a machine-specific path, so it works regardless of where each dev cloned this repo:
+**Per-project, portable across a team, published package** — commit a `.mcp.json` in your UE project root referencing the npm package; every dev gets it via `npx` with no manual clone/build/env-var setup at all:
+
+```json
+{
+  "mcpServers": {
+    "unreal-mcp": {
+      "command": "npx",
+      "args": ["-y", "@jjpxdev/unreal-mcp"]
+    }
+  }
+}
+```
+
+**Per-project, portable across a team, from source** — if you're not publishing to npm, reference an environment variable instead of a machine-specific path, so it works regardless of where each dev cloned this repo:
 
 ```json
 {
