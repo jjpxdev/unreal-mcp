@@ -1,7 +1,7 @@
 {
-  "name": "unreal-mcp",
-  "version": "0.1.0",
-  "description": "The most comprehensive MCP server for Unreal Engine — 120+ tools across 16 subsystems",
+  "name": "@jjpxdev/unreal-mcp",
+  "version": "0.1.1",
+  "description": "The most comprehensive MCP server for Unreal Engine — 120+ tools across 16 subsystems. Security-hardened fork of sam-david/unreal-mcp.",
   "license": "MIT",
   "type": "module",
   "main": "dist/index.js",
@@ -12,6 +12,17 @@
   "files": [
     "dist"
   ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/jjpxdev/unreal-mcp.git"
+  },
+  "homepage": "https://github.com/jjpxdev/unreal-mcp#readme",
+  "bugs": {
+    "url": "https://github.com/jjpxdev/unreal-mcp/issues"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
   "scripts": {
     "prepare": "tsc",
     "dev": "tsx watch src/bin.ts",
