@@ -1,4 +1,5 @@
-import { existsSync, readFileSync } from "node:fs";
+import { execFileSync } from "node:child_process";
+import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import type { UnrealMcpConfig } from "./types.js";
 import { ALL_MODULES } from "./types.js";
@@ -127,6 +128,13 @@ function autoDetectEnginePath(projectPath: string): string | undefined {
 		const association = uproject.EngineAssociation;
 		if (!association) return undefined;
 
+		// Registered engine install -- covers custom/non-default install
+		// locations (different drive, source build, etc.) that the hardcoded
+		// candidates below can't guess. Falls through silently if unavailable
+		// (non-Windows, no registry entry, association not registered).
+		const registered = tryReadRegisteredEnginePath(association);
+		if (registered && existsSync(registered)) return registered;
+
 		// Common UE install locations on Windows
 		const candidates = [
 			`C:\\Program Files\\Epic Games\\UE_${association}`,
@@ -144,9 +152,42 @@ function autoDetectEnginePath(projectPath: string): string | undefined {
 	return undefined;
 }
 
+/**
+ * Resolve an EngineAssociation via the Windows engine registration.
+ * - A plain version string (e.g. "5.5") is an Epic Games Launcher build,
+ *   registered under HKLM\SOFTWARE\EpicGames\Unreal Engine\<version>.
+ * - A GUID (e.g. "{...}") is a source build, registered per-user under
+ *   HKCU\SOFTWARE\Epic Games\Unreal Engine\Builds\<GUID>.
+ */
+function tryReadRegisteredEnginePath(association: string): string | undefined {
+	if (process.platform !== "win32") return undefined;
+
+	try {
+		const isGuid = association.startsWith("{");
+		const key = isGuid
+			? "HKCU\\SOFTWARE\\Epic Games\\Unreal Engine\\Builds"
+			: `HKLM\\SOFTWARE\\EpicGames\\Unreal Engine\\${association}`;
+		const valueName = isGuid ? association : "InstalledDirectory";
+
+		const output = execFileSync("reg", ["query", key, "/v", valueName], {
+			encoding: "utf-8",
+		});
+
+		const match = output.match(/REG_SZ\s+(.+)\r?$/m);
+		return match ? match[1].trim() : undefined;
+	} catch {
+		return undefined;
+	}
+}
+
 function findUproject(dir: string): string {
 	try {
-		const entries = require("node:fs").readdirSync(dir) as string[];
+		// NOTE: was `require("node:fs").readdirSync(...)` -- require() is not
+		// defined in this package's ESM output ("type": "module"), so this
+		// threw ReferenceError on every call and was silently caught below,
+		// meaning autoDetectEnginePath never found a .uproject file unless
+		// projectPath was passed as a literal .uproject path.
+		const entries = readdirSync(dir);
 		const uproject = entries.find((e: string) => e.endsWith(".uproject"));
 		return uproject || "";
 	} catch {
