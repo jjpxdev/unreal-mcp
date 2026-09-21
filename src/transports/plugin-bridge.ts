@@ -30,6 +30,7 @@ export class PluginBridgeClient {
 	private _available = false;
 	private _capabilities: PluginCapabilities | null = null;
 	private socket: Socket | null = null;
+	private connectingPromise: Promise<void> | null = null;
 	private receiveBuffer = Buffer.alloc(0);
 	private pendingRequests = new Map<
 		string,
@@ -88,40 +89,64 @@ export class PluginBridgeClient {
 			return;
 		}
 
-		await new Promise<void>((resolve, reject) => {
-			let connected = false;
-			const socket = createConnection({ host: this.host, port: this.port }, () => {
-				connected = true;
-				// The 3s budget below is meant to bound *connecting*. Node's
-				// setTimeout is an idle timer that stays armed for the life of the
-				// socket, so leaving it set would tear down a perfectly healthy
-				// connection 3s after the last message and flip _available to false.
-				socket.setTimeout(0);
-				this.socket = socket;
-				this.receiveBuffer = Buffer.alloc(0);
-				resolve();
-			});
-			socket.setTimeout(3000);
-			socket.on("timeout", () => {
-				if (connected) {
-					return;
-				}
-				socket.destroy();
-				reject(new Error("Connection timeout"));
-			});
-			socket.on("error", (err) => {
-				socket.destroy();
-				reject(err);
+		// isAvailable() and sendCommand() can both call this -- e.g. a status
+		// refresh and a tool call landing close together -- and without this
+		// guard each sees this.socket as not-yet-set (it's only assigned
+		// inside the async connect callback below) and opens its own
+		// createConnection(). Whichever callback resolves last wins the
+		// this.socket assignment; the other socket is never closed, just
+		// silently abandoned -- confirmed by reproducing it directly: firing
+        // isAvailable() and sendCommand() concurrently with no await between
+		// them left a real CLOSE_WAIT/FIN_WAIT_2 pair on the wire even though
+		// both calls succeeded. Sharing one in-flight promise means a second
+		// concurrent caller awaits the same connection attempt instead of
+		// starting a competing one.
+		if (this.connectingPromise) {
+			return this.connectingPromise;
+		}
+
+		this.connectingPromise = (async () => {
+			await new Promise<void>((resolve, reject) => {
+				let connected = false;
+				const socket = createConnection({ host: this.host, port: this.port }, () => {
+					connected = true;
+					// The 3s budget below is meant to bound *connecting*. Node's
+					// setTimeout is an idle timer that stays armed for the life of the
+					// socket, so leaving it set would tear down a perfectly healthy
+					// connection 3s after the last message and flip _available to false.
+					socket.setTimeout(0);
+					this.socket = socket;
+					this.receiveBuffer = Buffer.alloc(0);
+					resolve();
+				});
+				socket.setTimeout(3000);
+				socket.on("timeout", () => {
+					if (connected) {
+						return;
+					}
+					socket.destroy();
+					reject(new Error("Connection timeout"));
+				});
+				socket.on("error", (err) => {
+					socket.destroy();
+					reject(err);
+				});
+
+				// Set up persistent connection handlers
+				socket.on("data", (data) => this.handleData(data));
+				socket.on("end", () => this.handleDisconnect());
+				socket.on("close", () => this.handleDisconnect());
 			});
 
-			// Set up persistent connection handlers
-			socket.on("data", (data) => this.handleData(data));
-			socket.on("end", () => this.handleDisconnect());
-			socket.on("close", () => this.handleDisconnect());
-		});
+			// Negotiate capabilities after connecting
+			await this.negotiateCapabilities();
+		})();
 
-		// Negotiate capabilities after connecting
-		await this.negotiateCapabilities();
+		try {
+			await this.connectingPromise;
+		} finally {
+			this.connectingPromise = null;
+		}
 	}
 
 	private handleData(data: Buffer): void {
